@@ -1,0 +1,19 @@
+
+  
+.weekend-cell{
+    background-color: #fff4f4 !important; /* Slightly lighter gray for weekend cells */
+    color: red ;
+  }
+
+  .employee-row-top td:not(.ant-table-cell-fix-left ) {
+    border-bottom:0 dashed #f0f0f0 !important;
+    color:gainsboro;
+  }
+  
+  .employee-row-bottom td {
+    border-bottom: 2px solid #d9d9d9 !important;
+  }
+  
+  .employee-row-top:nth-child(4n-3) td {
+    border-top: 2px solid #d9d9d9 !important;
+  }

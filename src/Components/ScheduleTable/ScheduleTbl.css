@@ -1,0 +1,37 @@
+.table-container{
+
+    display: block;
+    overflow: auto;
+
+    
+}
+.clickable-row {
+  cursor: pointer;
+}
+
+table {
+  
+    
+  border-collapse: collapse;
+
+    
+    tr {
+      :last-child {
+        td {
+          border-bottom: 0;
+        }
+      }
+    }
+
+    th,
+    td {
+      margin: 0;
+      padding: 0.5rem;
+      border-bottom: 0.25px solid  rgb(240, 238, 238);
+      border-right: 0.25px  solid rgb(240, 238, 238);
+
+      :last-child {
+        border-right: 0;
+      }
+    }
+  }
