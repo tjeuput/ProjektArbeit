@@ -462,10 +462,10 @@ employee_schedules AS (
         s.date_id,
         ts1.name as planned_session,
         ts2.name as updated_session,
-        h.year_holiday,
-        rc.rest_2023,
-        sc.um_plan_count,
-        sc.rum_count
+        COALESCE(h.year_holiday, 0) as year_holiday,
+        COALESCE(rc.rest_2023, 0) as rest_2023,
+        COALESCE(sc.um_plan_count, 0) as um_plan_count,
+        COALESCE(sc.rum_count, 0) as rum_count
     FROM TB_EMPLOYEE e
     LEFT JOIN TB_SCHEDULE_2024 s ON s.id_employee = e.id_employee
     LEFT JOIN TB_SESSION ts1 ON ts1.session_id = s.session_id
@@ -473,21 +473,22 @@ employee_schedules AS (
     LEFT JOIN TB_YEAR_HOLIDAY h ON h.id_employee = e.id_employee AND h.year = 2024
     LEFT JOIN schedule_counts sc ON sc.id_employee = e.id_employee
     LEFT JOIN rest_2023_counts rc ON rc.id_employee = e.id_employee
-    WHERE e.id_area = 3
+    WHERE e.id_area = ?1
 )
 SELECT 
     id_employee,
     name,
     last_name,
-    json_group_array(date_id || ':' || COALESCE(planned_session, 'null')) as planned,
-    json_group_array(date_id || ':' || COALESCE(updated_session, 'null')) as updated,
-    rest_2023,
-    um_plan_count as um_plan,
-    (rest_2023 - rum_count) as rum_rest,
-    year_holiday,
-    um_plan_count
+    json_group_array(COALESCE(planned_session, '')) as sessions_planned,
+    json_group_array(COALESCE(updated_session, '')) as sessions_updated,
+    COALESCE(rest_2023, 0) as rest_2023,
+    COALESCE(um_plan_count, 0) as um_plan,
+    COALESCE((rest_2023 - rum_count), 0) as rum_rest,
+    COALESCE(year_holiday, 0) as year_holiday,
+    COALESCE(um_plan_count, 0) as um_plan_count
 FROM employee_schedules
-GROUP BY id_employee, name, last_name;
+GROUP BY id_employee, name, last_name
+Limit 10;
 ",
     )?;
 
@@ -504,18 +505,14 @@ GROUP BY id_employee, name, last_name;
             let um_plan: i32 = row.get("um_plan")?;
 
             let sessions_planned: Option<Vec<String>> = sessions_planned.map(|s| {
-                s.split(',')
-                    .map(|s| s.trim().to_string())
-                    .collect()
+                serde_json::from_str(&s).unwrap_or_else(|_| Vec::new())
             });
 
             let sessions_updated: Option<Vec<String>> = sessions_updated.map(|s| {
-                s.split(',')
-                    .map(|s| s.trim().to_string())
-                    .collect()
+                serde_json::from_str(&s).unwrap_or_else(|_| Vec::new())
             });
 
-            //println!("Debug: Raw result - id: {}, name: {:?}, last_name: {}, sessions_planned: {:?}, sessions_updated: {:?}", id, name, last_name, sessions_planned, sessions_updated);
+            println!("Debug: Raw result - id: {}, name: {:?}, last_name: {}, sessions_planned: {:?}, sessions_updated: {:?}", id, name, last_name, sessions_planned, sessions_updated);
 
             Ok(DbResultDiesntplan {
                 id,
