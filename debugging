@@ -1,0 +1,29 @@
+netstat -ano | findstr :5173
+taskkill /PID 12132 /F
+
+git add . 
+git commit -m "Your descriptive commit message"
+
+git push origin <branch-name>
+git push
+
+ctrl+c terminate tauri
+
+
+$env:RUST_BACKTRACE=1; cargo tauri dev --no-watch
+
+set RUST_LOG=debug
+
+
+new branch 
+Ensure that you are on the master branch or the branch from which you want to create the new branch
+git checkout [master/main] -- atm I use main
+Pull the latest changes - local repository update from remote
+git pull origin main
+create and switch to a new branch
+git checkout -b new-feature
+Commit the changes
+git add .
+git commit -m "Your descriptive commit message"
+
+git push -u origin new-feature
