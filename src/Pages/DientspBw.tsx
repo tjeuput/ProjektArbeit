@@ -21,77 +21,43 @@ interface MappedEmployee {
   rest?: number;
   restUm?: number;
   name: string;
-  [key: string]: number | string;
+  [key: string]: number | string | undefined;
 }
 
 const DienstplanBw: React.FC = () => {
- 
-  const area = 1;
-
+  const [selectedArea, setSelectedArea] = useState<number>(3);
   const columns = MonthsHeader();
-  //console.log("months header is", MonthsHeader());
-
   const [schedule, setSchedule] = useState<MappedEmployee[]>([]);
-
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchSchedule(area);
-  }, []);
+    fetchSchedule();
+  }, [selectedArea]);
 
-  // function to scroll to today's date when a button is clicked
-  const scrollToKey = (key: string) => {
-    const tableElement = document.querySelector(".ant-table-thead"); // Get th wrapper (the header)
-
-    if (tableElement) {
-      const headerElement = tableElement.querySelector(`th[data-key="${key}"]`); // Find the header cell with the specific key
-
-      if (headerElement) {
-        headerElement.scrollIntoView({
-          behavior: "smooth",
-          inline: "center", // Scroll horizontally to center the header cell
-        });
-      } else {
-        console.warn(`Header element with key '${key}' not found.`);
-      }
-    } else {
-      console.warn("Table element not found.");
-    }
-  };
-
-  // function to get today's date
-  const getToday: () => string = () => {
-    const today = new Date();
-    const day = today.getDate();
-    const month = today.getMonth() + 1;
-    // Creating the formatted string in 'month-day' format using Months in helper
-    const todayIs = `${Months[month]["name"]}-${day}`;
-    return todayIs.toLocaleLowerCase();
-  };
-  console.log(getToday());
-
-  const fetchSchedule = async (selectedArea) => {
-    
+  const fetchSchedule = async () => {
     try {
-
       setLoading(true);
-      // Fetch data from get_table_schedule
-      const tableScheduleResponse = await invoke<string>("get_table_schedule_area", {area : selectedArea});
+      
+      const tableScheduleResponse = await invoke<string>("get_table_schedule_area", {
+        area: selectedArea
+      });
+      
       console.log(
-        "Debug: Received response from get_table_schedule:",
+        "Debug: Received table schedule response:",
         tableScheduleResponse
       );
       const parsedTableSchedule: Employee[] = JSON.parse(tableScheduleResponse);
 
-      // Fetch data from get_employee_count
       const employeeCountResponse = await invoke<string>(
-        "get_employee_daily_count_area", {area : selectedArea}
+        "get_employee_daily_count_area", 
+        {area: selectedArea}
       );
+      
       console.log(
-        "Debug: Received response from get_employee_count:",
+        "Debug: Received employee count response:",
         employeeCountResponse
       );
-      const parsedEmployeeCount: { name: string; [key: string]: number } =
+      const parsedEmployeeCount: { [key: string]: number } = 
         JSON.parse(employeeCountResponse);
 
       // Merge the data from both APIs
@@ -102,6 +68,7 @@ const DienstplanBw: React.FC = () => {
             return [];
           }
 
+          // Create base employee row (Plan)
           const baseEmployee: MappedEmployee = {
             key: index * 2 + 1,
             rest: employee.rest_2023 ?? 0,
@@ -109,10 +76,17 @@ const DienstplanBw: React.FC = () => {
             name: employee.name ?? "Unknown",
           };
 
-          employee.sessions_planned?.forEach((session, idx) => {
-            baseEmployee[`${idx + 1}`] = session;
-          });
-
+          // Fill in planned sessions
+          if (employee.sessions_planned) {
+            employee.sessions_planned.forEach((session, idx) => {
+              if (session && session !== 'null') {
+                // Add 1 to idx since our column keys are 1-based
+                baseEmployee[`${idx + 1}`] = session;
+              }
+            });
+          }
+          
+          // Create updated sessions row
           const updatedEmployee: MappedEmployee = {
             key: index * 2 + 2,
             rest: employee.year_holiday ?? 0,
@@ -120,19 +94,31 @@ const DienstplanBw: React.FC = () => {
             name: employee.last_name ?? "Unknown",
           };
 
-          employee.sessions_updated?.forEach((session, idx) => {
-            updatedEmployee[`${idx + 1}`] = session;
-          });
+          // Fill in updated sessions, maintaining original empty cells
+          if (employee.sessions_updated) {
+            employee.sessions_updated.forEach((session, idx) => {
+              // Only set value if it's actually updated (not null)
+              if (session && session !== 'null') {
+                // Add 1 to idx since our column keys are 1-based
+                updatedEmployee[`${idx + 1}`] = session;
+              }
+            });
+          }
 
           return [baseEmployee, updatedEmployee];
         }),
+        // Add the employee count row at the bottom
         {
-          key: 0,
+          key: -1, // Use negative key to ensure it's always last
           name: "Mitarbeiter am Meldetag",
-          ...parsedEmployeeCount,
-        },
+          ...Object.entries(parsedEmployeeCount).reduce((acc, [key, value]) => ({
+            ...acc,
+            [key]: value
+          }), {})
+        }
       ];
 
+      console.log("Debug: Mapped data:", mappedData);
       setSchedule(mappedData);
     } catch (error) {
       console.error("Error fetching schedule:", error);
@@ -143,7 +129,8 @@ const DienstplanBw: React.FC = () => {
   };
 
   const getRowClassName = (record: MappedEmployee, index: number) => {
-    return index % 2 ? "employee-row-bottom" : "employee-row-top";
+    if (record.key === -1) return "count-row";
+    return record.key % 2 === 0 ? "employee-row-bottom" : "employee-row-top";
   };
 
   return (

@@ -1,0 +1,15 @@
+netstat -ano | findstr :5173
+taskkill /PID 12132 /F
+
+git add . 
+git commit -m "Your descriptive commit message"
+
+git push origin <branch-name>
+git push
+
+ctrl+c terminate tauri
+
+
+$env:RUST_BACKTRACE=1; cargo tauri dev --no-watch
+
+set RUST_LOG=debug
