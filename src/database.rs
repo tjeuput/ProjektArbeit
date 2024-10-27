@@ -1,24 +1,6 @@
-/*use rusqlite::{Connection, Result};
-
-const DB_PATH: &str = "EncryptedDb.db";
-const ENCRYPTION_KEY: &str = "p6%7P*KJzZpvK@jZS4Xb36hGPGMVuj@U!aDYYq6";
-
-/* pub fn create_connection() -> Result<Connection> {
-    let conn = Connection::open(DB_PATH)?;
-    conn.pragma_update(None, "key", ENCRYPTION_KEY)?;
-    Ok(conn)
-} */
-
-pub fn create_connection() -> Result<Connection>{
-    let conn = Connection::open("ResourcesDb.db")?;
-    Ok(conn)
-}
-the encrypted db has to be integrated later because currently I copy paste what is in tauri-sqlite repo
-*/
-
 use crate::state::ServiceAccess;
 use chrono::{Datelike, Local, NaiveDate};
-use log::info;
+use log::{info, error};
 use rusqlite::{params, Connection, OptionalExtension, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -26,190 +8,301 @@ use std::fs;
 use std::sync::Arc;
 use tauri::AppHandle;
 
-const CURRENT_DB_VERSION: u32 = 2;
+const CURRENT_DB_VERSION: u32 = 1;
 
 /// Initializes the database connection, creating the .sqlite file if needed, and upgrading the database
 /// if it's out of date.
 pub fn initialize_database(app_handle: &AppHandle) -> Result<Connection, rusqlite::Error> {
-    let app_dir = app_handle
-        .path_resolver()
-        .app_data_dir()
-        .expect("The app data directory should exist.");
-    fs::create_dir_all(&app_dir).expect("The app data directory should be created.");
-
-    /*  store in network drive
-        // Get the network path from an environment variable or use a default
-    let network_path = env::var("MY_APP_DB_PATH")
-        .unwrap_or_else(|_| String::from(r"\\SERVER\Share\MyAppData"));
-    let network_path = PathBuf::from(network_path);
-
-    // Ensure the directory exists
-    fs::create_dir_all(&network_path).map_err(|e| format!("Failed to create directory: {}", e))?;
-
-    let sqlite_path = network_path.join("MyApp.sqlite");
-
-    // Attempt to open the database with retry logic
-    let mut attempts = 0;
-    let max_attempts = 3;
-    let mut db = loop {
-        match Connection::open(&sqlite_path) {
-            Ok(conn) => break conn,
-            Err(e) if attempts < max_attempts => {
-                attempts += 1;
-                eprintln!("Failed to connect to database, retrying ({}/{}): {}", attempts, max_attempts, e);
-                std::thread::sleep(std::time::Duration::from_secs(2));
-            }
-            Err(e) => return Err(Box::new(e)),
-        }
-    };
-
-    // ... rest of the function
-
-    Ok(db)*/
-
+    info!("Initializing database...");
+    
     let mut db = Connection::open("ResourcesDb.db")?;
+    
+    // Check required tables first
+    check_required_tables(&db)?;
 
     let mut user_pragma = db.prepare("PRAGMA user_version")?;
     let existing_user_version: u32 = user_pragma.query_row([], |row| Ok(row.get(0)?))?;
     drop(user_pragma);
 
+    info!("Current database version: {}", existing_user_version);
+    
     upgrade_database_if_needed(&mut db, existing_user_version)?;
 
     Ok(db)
 }
 
-/// Upgrades the database to the current version.
 pub fn upgrade_database_if_needed(
     db: &mut Connection,
     existing_version: u32,
 ) -> Result<(), rusqlite::Error> {
-    if existing_version == 1 {
-        db.pragma_update(None, "journal_mode", "WAL")?;
+    info!("Starting database upgrade from version {}", existing_version);
 
-    
-        // First check if tables exist
-        let table_exist= db.query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tb_area'",
-            [],
-            |row| row.get::<_, i32>(0)
-        )? > 0;
+    let create_index_statements = [
+        (
+            "idx_schedule_2024_employee_session",
+            "CREATE INDEX idx_schedule_2024_employee_session 
+             ON TB_SCHEDULE_2024(id_employee, session_id, updated_session_id)"
+        ),
+        (
+            "idx_schedule_2024_date",
+            "CREATE INDEX idx_schedule_2024_date 
+             ON TB_SCHEDULE_2024(date_id, id_employee)"
+        ),
+        (
+            "idx_employee_area_full",
+            "CREATE INDEX idx_employee_area_full 
+             ON TB_EMPLOYEE(id_area, id_employee, name, last_name)"
+        ),
+        (
+            "idx_schedule_2023_employee_session",
+            "CREATE INDEX idx_schedule_2023_employee_session 
+             ON TB_SCHEDULE_2023(id_employee, session_id, updated_session_id)"
+        ),
+        (
+            "idx_schedule_2024_date_update",
+            "CREATE INDEX idx_schedule_2024_date_update 
+             ON TB_SCHEDULE_2024(date_id) 
+             WHERE updated_session_id IS NULL"
+        ),
+        (
+            "idx_year_holiday_composite",
+            "CREATE INDEX idx_year_holiday_composite 
+             ON TB_YEAR_HOLIDAY(id_employee, year, year_holiday)"
+        ),
+    ];
 
-        let tx = db.transaction()?;
-
-        
-
-        if !table_exist {
-
-             // Create tables for fresh database
-             println!("Creating tables for fresh database...");
-             tx.execute_batch("CREATE TABLE tb_area (
-	    id_area	INTEGER NOT NULL UNIQUE,
-	    name_area	TEXT,
-	    abbr_area	TEXT,
-	    PRIMARY KEY(id_area AUTOINCREMENT)
-        );
-        CREATE TABLE TB_DATE (
-            date_id	INTEGER,
-            date	DATE NOT NULL,
-            day_of_week	TEXT NOT NULL,
-            PRIMARY KEY(date_id AUTOINCREMENT)
-        );
-        CREATE TABLE TB_GROUP (
-        id_group	INTEGER NOT NULL UNIQUE,
-        group_label	TEXT,
-        min_size	INT,
-        group_color	TEXT,
-        PRIMARY KEY(id_group AUTOINCREMENT)
-        );
-        CREATE TABLE TB_LEGENDE (
-        id_legende	INTEGER,
-        abkuerzung	TEXT NOT NULL,
-        beschreibung	TEXT NOT NULL,
-        PRIMARY KEY(id_legende AUTOINCREMENT)
-        );
-        CREATE TABLE TB_SESSION (
-        session_id	INTEGER,
-        name	TEXT NOT NULL,
-        start_time	TEXT NOT NULL,
-        end_time	TEXT NOT NULL,
-        PRIMARY KEY(session_id AUTOINCREMENT)
-        );
-        CREATE TABLE TB_EMPLOYEE (
-        id_employee	INTEGER,
-        employee_number	TEXT,
-        name	TEXT NOT NULL,
-        last_name	TEXT,
-        id_group	INTEGER NOT NULL,
-        id_area	INTEGER NOT NULL,
-        FOREIGN KEY(id_group) REFERENCES TB_GROUP(id_group),
-        FOREIGN KEY(id_area) REFERENCES TB_AREA(id_area),
-        PRIMARY KEY(id_employee AUTOINCREMENT)
-        );
-        CREATE TABLE TB_YEAR_HOLIDAY (
-        id_holiday	INTEGER,
-        id_employee	INTEGER NOT NULL,
-        year_holiday	INTEGER NOT NULL,
-        year	INTEGER NOT NULL,
-        PRIMARY KEY(id_holiday AUTOINCREMENT),
-        FOREIGN KEY(id_employee) REFERENCES TB_EMPLOYEE(id_employee)
-        );
-        CREATE TABLE TB_SCHEDULE_2024 (
-        schedule_id	INTEGER,
-        id_employee	INTEGER NOT NULL,
-        date_id	INTEGER NOT NULL,
-        session_id	INTEGER NOT NULL,
-        updated_session_id	INTEGER,
-        FOREIGN KEY(date_id) REFERENCES TB_DATE(date_id),
-        FOREIGN KEY(id_employee) REFERENCES TB_EMPLOYEE(id_employee),
-        FOREIGN KEY(session_id) REFERENCES TB_SESSION(session_id),
-        PRIMARY KEY(schedule_id AUTOINCREMENT)
-        );
-        CREATE TABLE TB_SCHEDULE_2023 (
-        schedule_id	INTEGER,
-        id_employee	INTEGER NOT NULL,
-        date_id	INTEGER NOT NULL,
-        session_id	INTEGER NOT NULL,
-        updated_session_id	INTEGER,
-        PRIMARY KEY(schedule_id AUTOINCREMENT),
-        FOREIGN KEY(session_id) REFERENCES TB_SESSION(session_id),
-        FOREIGN KEY(id_employee) REFERENCES TB_EMPLOYEE(id_employee),
-        FOREIGN KEY(date_id) REFERENCES TB_DATE(date_id)
-        );"
+    // First check if indexes exist
+    let mut missing_indexes = Vec::new();
+    for (index_name, _) in &create_index_statements {
+        let count: i32 = db.query_row(
+            "SELECT COUNT(*) 
+             FROM sqlite_master 
+             WHERE type='index' AND name=?",
+            params![index_name],
+            |row| row.get(0)
         )?;
-
+        
+        if count == 0 {
+            missing_indexes.push(*index_name);
         }
-
-        // Always try to create indexes
-        println!("Creating indexes...");
-        tx.execute_batch(
-            "
-            CREATE INDEX IF NOT EXISTS idx_employee_area 
-            ON TB_EMPLOYEE(id_area, id_employee);
-
-            CREATE INDEX IF NOT EXISTS idx_year_holiday_employee_year 
-            ON TB_YEAR_HOLIDAY(id_employee, year);
-
-            CREATE INDEX IF NOT EXISTS idx_schedule_2024_employee 
-            ON TB_SCHEDULE_2024(id_employee, date_id);
-
-            CREATE INDEX IF NOT EXISTS idx_schedule_2024_sessions
-            ON TB_SCHEDULE_2024(session_id, updated_session_id);
-
-            CREATE INDEX IF NOT EXISTS idx_schedule_2023_employee 
-            ON TB_SCHEDULE_2023(id_employee);
-
-            CREATE INDEX IF NOT EXISTS idx_schedule_2023_sessions
-            ON TB_SCHEDULE_2023(session_id, updated_session_id);
-            "
-        )?;
-
-        
-        tx.pragma_update(None, "user_version", 2)?;
-        tx.commit()?;
     }
 
+    // If we have missing indexes or version is less than 2, perform the upgrade
+    if !missing_indexes.is_empty() || existing_version < 2 {
+        info!("Missing indexes or version upgrade needed. Creating indexes...");
+        
+        // Set journal mode
+        match db.pragma_update(None, "journal_mode", "WAL") {
+            Ok(_) => info!("Set journal mode to WAL"),
+            Err(e) => {
+                error!("Failed to set journal mode: {}", e);
+                return Err(e);
+            }
+        }
 
+        // Start transaction
+        let tx = match db.transaction() {
+            Ok(tx) => tx,
+            Err(e) => {
+                error!("Failed to start transaction: {}", e);
+                return Err(e);
+            }
+        };
+
+        // Drop existing indexes first
+        info!("Dropping existing indexes...");
+        match tx.execute_batch(
+            "
+            DROP INDEX IF EXISTS idx_schedule_2024_employee_session;
+            DROP INDEX IF EXISTS idx_schedule_2024_date;
+            DROP INDEX IF EXISTS idx_employee_area_full;
+            DROP INDEX IF EXISTS idx_schedule_2023_employee_session;
+            DROP INDEX IF EXISTS idx_schedule_2024_date_update;
+            DROP INDEX IF EXISTS idx_year_holiday_composite;
+            "
+        ) {
+            Ok(_) => info!("Successfully dropped existing indexes"),
+            Err(e) => {
+                error!("Failed to drop indexes: {}", e);
+                return Err(e);
+            }
+        }
+
+        // Create each index individually with error checking
+        for (index_name, create_statement) in &create_index_statements {
+            info!("Creating index {}...", index_name);
+            match tx.execute(create_statement, []) {
+                Ok(_) => info!("Successfully created index {}", index_name),
+                Err(e) => {
+                    error!("Failed to create index {}: {}", index_name, e);
+                    // Log the full SQL statement for debugging
+                    error!("Failed SQL statement: {}", create_statement);
+                    return Err(e);
+                }
+            }
+        }
+
+        // Update version if needed
+        if existing_version < 2 {
+            match tx.pragma_update(None, "user_version", 2) {
+                Ok(_) => info!("Updated database version to 2"),
+                Err(e) => {
+                    error!("Failed to update database version: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+
+        match tx.commit() {
+            Ok(_) => info!("Successfully committed transaction"),
+            Err(e) => {
+                error!("Failed to commit transaction: {}", e);
+                return Err(e);
+            }
+        }
+    }
+
+    // Verify all indexes exist after potential upgrade
+    info!("Verifying indexes...");
     
+    // List all existing indexes
+    info!("Current indexes in database:");
+    let mut stmt = db.prepare(
+        "SELECT name, tbl_name, sql 
+         FROM sqlite_master 
+         WHERE type='index'"
+    )?;
+    
+    let indexes = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?
+        ))
+    })?;
+
+    for index in indexes {
+        if let Ok((name, table, sql)) = index {
+            info!("Found index {} on table {}", name, table);
+            info!("Index creation SQL: {}", sql);
+        }
+    }
+
+    // Final verification
+    for (index_name, _) in &create_index_statements {
+        let count: i32 = db.query_row(
+            "SELECT COUNT(*) 
+             FROM sqlite_master 
+             WHERE type='index' AND name=?",
+            params![index_name],
+            |row| row.get(0)
+        )?;
+        
+        if count == 0 {
+            error!("Required index {} not found after upgrade", index_name);
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Expected index {} not found", index_name))
+            ));
+        } else {
+            info!("Verified index {} exists", index_name);
+        }
+    }
+
+    info!("Database upgrade completed successfully");
+    Ok(())
+}
+
+
+pub fn check_required_tables(db: &Connection) -> Result<(), rusqlite::Error> {
+    let required_tables = [
+        "TB_SCHEDULE_2024",
+        "TB_EMPLOYEE",
+        "TB_SCHEDULE_2023",
+        "TB_YEAR_HOLIDAY"
+    ];
+
+    for table in &required_tables {
+        let count: i32 = db.query_row(
+            "SELECT COUNT(*) 
+             FROM sqlite_master 
+             WHERE type='table' AND name=?",
+            params![table],
+            |row| row.get(0)
+        )?;
+
+        if count == 0 {
+            error!("Required table {} not found", table);
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(1),
+                Some(format!("Required table {} not found", table))
+            ));
+        }
+        info!("Found required table: {}", table);
+
+        // Log table structure
+        let create_sql: String = db.query_row(
+            "SELECT sql 
+             FROM sqlite_master 
+             WHERE type='table' AND name=?",
+            params![table],
+            |row| row.get(0)
+        )?;
+        info!("Table {} structure: {}", table, create_sql);
+    }
+
+    Ok(())
+}
+
+pub fn verify_query_plans(db: &Connection) -> Result<(), rusqlite::Error> {
+    info!("Verifying query plans...");
+    
+    // Check get_table_schedule_area query plan
+    {
+        let mut explain_schedule = db.prepare(
+            "EXPLAIN QUERY PLAN
+            SELECT e.id_employee, e.name, e.last_name
+            FROM TB_EMPLOYEE e
+            WHERE e.id_area = 1
+            LIMIT 1"
+        )?;
+        
+        let plans = explain_schedule.query_map([], |row| {
+            let detail: String = row.get(3)?;
+            info!("Query plan: {}", detail);
+            // Check if the plan mentions our index
+            if !detail.contains("idx_employee_area_full") {
+                info!("Warning: idx_employee_area_full index not used in get_table_schedule_area query");
+            }
+            Ok(())
+        })?;
+
+        // Collect to ensure all rows are processed
+        plans.collect::<Result<Vec<_>, _>>()?;
+    }
+    
+    // Check get_employee_daily_count_area query plan
+    {
+        let mut explain_count = db.prepare(
+            "EXPLAIN QUERY PLAN
+            SELECT COUNT(DISTINCT sh_2024.id_employee)
+            FROM TB_EMPLOYEE e
+            JOIN TB_SCHEDULE_2024 sh_2024 ON sh_2024.id_employee = e.id_employee
+            WHERE sh_2024.date_id = 1 AND e.id_area = 1"
+        )?;
+        
+        let count_plans = explain_count.query_map([], |row| {
+            let detail: String = row.get(3)?;
+            info!("Query plan: {}", detail);
+            if !detail.contains("idx_schedule_2024_date") {
+                info!("Warning: idx_schedule_2024_date index not used in get_employee_daily_count_area query");
+            }
+            Ok(())
+        })?;
+
+        // Collect to ensure all rows are processed
+        count_plans.collect::<Result<Vec<_>, _>>()?;
+    }
 
     Ok(())
 }
@@ -258,13 +351,15 @@ pub fn update_schedule(
                 let mut stmt = db.prepare(
                     "
               SELECT id_employee, session_id, date_id 
-              FROM TB_SCHEDULE_2024 
-              WHERE date_id BETWEEN ? AND ? AND updated_session_id IS NULL
-              LIMIT ?
+            FROM TB_SCHEDULE_2024 
+            INDEXED BY idx_schedule_2024_date_update
+            WHERE date_id BETWEEN ? AND ? 
+            AND updated_session_id IS NULL
+             
           ",
                 )?;
 
-                let rows = stmt.query_map(params![start_day, end_day, BATCH_SIZE], |row| {
+                let rows = stmt.query_map(params![start_day, end_day], |row| {
                     Ok((
                         row.get::<_, i32>(0)?, // id_employee
                         row.get::<_, i32>(1)?, // session_id
@@ -279,7 +374,9 @@ pub fn update_schedule(
             }
 
             // Perform bulk update in a transaction
-            let tx = db.transaction()?;
+            if !updates.is_empty(){
+
+                let tx = db.transaction()?;
             {
                 let mut update_stmt = tx.prepare(
                     "
@@ -294,6 +391,9 @@ pub fn update_schedule(
                 }
             }
             tx.commit()?;
+
+            }
+            
 
             // Update the last processed day
             let last_updated_date = first_day_of_year + chrono::Duration::days(end_day as i64);
@@ -427,70 +527,80 @@ pub fn get_table_schedule_area(db: &Connection, area: i32) -> Result<String, rus
     let mut stmt = db.prepare(
         "
   WITH schedule_counts AS (
-    -- Pre-calculate all counts for each employee
+        -- Pre-calculate all counts for each employee
+        SELECT 
+            id_employee,
+            COUNT(CASE 
+                WHEN COALESCE(s.updated_session_id, s.session_id) = 8 THEN 1
+            END) as rum_count,
+            COUNT(CASE 
+                WHEN COALESCE(s.updated_session_id, s.session_id) = 6 THEN 1
+            END) as um_plan_count
+        FROM TB_SCHEDULE_2024 s
+        GROUP BY id_employee
+    ),
+    rest_2023_counts AS (
+        -- Pre-calculate rest_2023 counts
+        SELECT 
+            s.id_employee,
+            COUNT(CASE 
+                WHEN COALESCE(s.updated_session_id, s.session_id) = 6 THEN 1
+            END) as rest_2023
+        FROM TB_SCHEDULE_2023 s
+        GROUP BY s.id_employee
+    ),
+    employee_schedules AS (
+        -- Get schedule information with all dates
+        SELECT 
+            e.id_employee,
+            e.name,
+            e.last_name,
+            s.date_id,
+            COALESCE(ts1.name, '') as planned_session,
+            CASE 
+                WHEN s.updated_session_id IS NOT NULL THEN COALESCE(ts2.name, '')
+                ELSE NULL
+            END as updated_session,
+            COALESCE(h.year_holiday, 0) as year_holiday,
+            COALESCE(r.rest_2023, 0) as rest_2023,
+            COALESCE(sc.um_plan_count, 0) as um_plan_count,
+            COALESCE(sc.rum_count, 0) as rum_count
+        FROM TB_EMPLOYEE e
+        LEFT JOIN TB_SCHEDULE_2024 s 
+            ON s.id_employee = e.id_employee
+        LEFT JOIN TB_SESSION ts1 
+            ON ts1.session_id = s.session_id
+        LEFT JOIN TB_SESSION ts2 
+            ON ts2.session_id = s.updated_session_id
+        LEFT JOIN TB_YEAR_HOLIDAY h 
+            ON h.id_employee = e.id_employee 
+            AND h.year = 2024
+        LEFT JOIN schedule_counts sc 
+            ON sc.id_employee = e.id_employee
+        LEFT JOIN rest_2023_counts r 
+            ON r.id_employee = e.id_employee
+        WHERE e.id_area = ?1
+        ORDER BY s.date_id
+    )
     SELECT 
         id_employee,
-        COUNT(CASE 
-            WHEN (updated_session_id IS NULL OR updated_session_id = '') AND session_id = 8 THEN 1
-            WHEN updated_session_id = '8' THEN 1
-        END) as rum_count,
-        COUNT(CASE 
-            WHEN (updated_session_id IS NULL OR updated_session_id = '') AND session_id = 6 THEN 1
-            WHEN updated_session_id = '6' THEN 1
-        END) as um_plan_count
-    FROM TB_SCHEDULE_2024
-    GROUP BY id_employee
-),
-rest_2023_counts AS (
-    -- Pre-calculate rest_2023 counts
-    SELECT 
-        s.id_employee,
-        COUNT(CASE 
-            WHEN (s.updated_session_id IS NULL OR s.updated_session_id = '') AND s.session_id = 6 THEN 1
-            WHEN s.updated_session_id = '6' THEN 1
-        END) as rest_2023
-    FROM TB_SCHEDULE_2023 s
-    JOIN TB_YEAR_HOLIDAY yh ON yh.id_employee = s.id_employee AND yh.year = 2023
-    GROUP BY s.id_employee
-),
-employee_schedules AS (
-    -- Get schedule information
-    SELECT 
-        e.id_employee,
-        e.name,
-        e.last_name,
-        s.date_id,
-        ts1.name as planned_session,
-        ts2.name as updated_session,
-        COALESCE(h.year_holiday, 0) as year_holiday,
-        COALESCE(rc.rest_2023, 0) as rest_2023,
-        COALESCE(sc.um_plan_count, 0) as um_plan_count,
-        COALESCE(sc.rum_count, 0) as rum_count
-    FROM TB_EMPLOYEE e
-    LEFT JOIN TB_SCHEDULE_2024 s ON s.id_employee = e.id_employee
-    LEFT JOIN TB_SESSION ts1 ON ts1.session_id = s.session_id
-    LEFT JOIN TB_SESSION ts2 ON ts2.session_id = s.updated_session_id
-    LEFT JOIN TB_YEAR_HOLIDAY h ON h.id_employee = e.id_employee AND h.year = 2024
-    LEFT JOIN schedule_counts sc ON sc.id_employee = e.id_employee
-    LEFT JOIN rest_2023_counts rc ON rc.id_employee = e.id_employee
-    WHERE e.id_area = ?1
-)
-SELECT 
-    id_employee,
-    name,
-    last_name,
-    json_group_array(COALESCE(planned_session, '')) as sessions_planned,
-    json_group_array(COALESCE(updated_session, '')) as sessions_updated,
-    COALESCE(rest_2023, 0) as rest_2023,
-    COALESCE(um_plan_count, 0) as um_plan,
-    COALESCE((rest_2023 - rum_count), 0) as rum_rest,
-    COALESCE(year_holiday, 0) as year_holiday,
-    COALESCE(um_plan_count, 0) as um_plan_count
-FROM employee_schedules
-GROUP BY id_employee, name, last_name
-Limit 10;
-",
-    )?;
+        name,
+        last_name,
+        json_group_array(planned_session) FILTER (WHERE date_id IS NOT NULL) as sessions_planned,
+        json_group_array(
+            CASE WHEN updated_session IS NOT NULL 
+            THEN updated_session 
+            ELSE 'null' END
+        ) FILTER (WHERE date_id IS NOT NULL) as sessions_updated,
+        MAX(rest_2023) as rest_2023,
+        MAX(year_holiday) as year_holiday,
+        MAX(um_plan_count) as um_plan,
+        MAX(rum_count) as rum_count
+    FROM employee_schedules
+    GROUP BY id_employee, name, last_name
+    LIMIT 10;
+    ")?;
+  
 
     let db_results: Vec<DbResultDiesntplan> = stmt
         .query_map(&[&area], |row| {
@@ -500,7 +610,7 @@ Limit 10;
             let sessions_planned: Option<String> = row.get("sessions_planned")?;
             let sessions_updated: Option<String> = row.get("sessions_updated")?;
             let rest_2023: i32 = row.get("rest_2023")?;
-            let rum_rest: i32 = row.get("rum_rest")?;
+            let rum_rest: i32 = row.get("rum_count")?;
             let year_holiday: i32 = row.get("year_holiday")?;
             let um_plan: i32 = row.get("um_plan")?;
 
@@ -512,13 +622,11 @@ Limit 10;
                 serde_json::from_str(&s).unwrap_or_else(|_| Vec::new())
             });
 
-            println!("Debug: Raw result - id: {}, name: {:?}, last_name: {}, sessions_planned: {:?}, sessions_updated: {:?}", id, name, last_name, sessions_planned, sessions_updated);
-
             Ok(DbResultDiesntplan {
                 id,
                 name,
                 last_name,
-                sessions_planned, 
+                sessions_planned,
                 sessions_updated,
                 rest_2023,
                 rum_rest,
@@ -546,23 +654,43 @@ pub fn get_employee_daily_count_area(db: &Connection, area: i32) -> Result<Strin
     // create array
     let mut stmt = db.prepare(
         "
-       SELECT COUNT(DISTINCT sh_2024.id_employee)
-       FROM TB_EMPLOYEE e
-	   JOIN 
-			TB_SCHEDULE_2024 sh_2024 ON sh_2024.id_employee = e.id_employee
-       WHERE 
-			sh_2024.date_id = ? AND 
-			(sh_2024.updated_session_id IS NOT NULL OR sh_2024.session_id != 9) AND
-			e.id_area = ?
-	    ",
-    )?;
+        WITH RECURSIVE date_series AS (
+            SELECT 1 as date_id
+            UNION ALL
+            SELECT date_id + 1
+            FROM date_series
+            WHERE date_id < 367
+        )
+        SELECT 
+            ds.date_id as key,
+            COUNT(DISTINCT CASE 
+                WHEN COALESCE(sh.updated_session_id, sh.session_id) != 9 
+                THEN sh.id_employee 
+            END) as count
+        FROM date_series ds
+        LEFT JOIN TB_SCHEDULE_2024 sh
+            ON sh.date_id = ds.date_id
+        LEFT JOIN TB_EMPLOYEE e
+            ON e.id_employee = sh.id_employee
+            AND e.id_area = ?1
+        GROUP BY ds.date_id
+        ORDER BY ds.date_id;
+    ")?;
 
+    // Create a HashMap to store results
     let mut results = HashMap::new();
 
-    for date_id in 1..=366 {
-        let count: i32 = stmt.query_row([date_id, area], |row| row.get(0))?;
-        results.insert(date_id, count);
-        //println!("Date id {}, count {}", date_id, count);
+    let rows = stmt.query_map([area], |row| {
+        Ok((
+            row.get::<_, i32>(0)?, // date_id
+            row.get::<_, i32>(1)?, // count
+        ))
+    })?;
+
+    for row_result in rows {
+        if let Ok((date_id, count)) = row_result {
+            results.insert(date_id, count);
+        }
     }
 
     // Serialize the results to JSON
