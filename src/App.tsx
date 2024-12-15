@@ -7,13 +7,14 @@ import 'moment/locale/de';
 import { ConfigProvider, Layout } from 'antd';
 import SideMenu from './Components/SideMenu/SideMenu';
 import AppRouter from './Components/AppRouter';
-
+import { AuthProvider } from './AuthContext';
 moment.locale('de');
 
 const App: React.FC = () => {
 
   return (
-    <ConfigProvider locale={deDE}
+    <AuthProvider>
+      <ConfigProvider locale={deDE}
     theme={{
       components: {
         Menu: { darkItemSelectedBg: '#F3D324' }
@@ -27,6 +28,8 @@ const App: React.FC = () => {
         </Layout>
       </Layout>
     </ConfigProvider>
+    </AuthProvider>
+   
   );
 };
 

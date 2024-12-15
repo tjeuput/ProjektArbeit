@@ -3,7 +3,7 @@ import { DatePicker, Typography, Card, Space, Input, Col, Row, Button } from 'an
 
 import { Content } from 'antd/es/layout/layout';
 import React from 'react';
-import EinzelauszugATbl from './EinzelATbl';
+import EinzelauszugATbl from './EinzelauszugATbl';
 
 
 

@@ -1,14 +1,6 @@
 import React, { useState } from 'react';
-import { Table, Input, Button, Popconfirm, Form, Select, InputNumber, Card } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Table, Input, Button, Popconfirm, Form } from 'antd';
 
-const waitTime = (time: number = 100) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(true);
-    }, time);
-  });
-};
 
 type DataSourceType = {
   key: React.Key;

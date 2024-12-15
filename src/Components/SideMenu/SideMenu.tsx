@@ -37,13 +37,17 @@ const SideMenu: React.FC = () => {
       getItem('Dienstplan HW', 'DienstpHw'),
       getItem('Einzelauszug HW', 'EinzelHw'),
       getItem('Dienstplan A', 'DienstpA'),
-      getItem('Einzelauszug A', 'EinzelA'),
+      getItem('Einzelauszug A', 'EinzelA'),      
+      getItem('E ATbl', 'EinzelauszugATbl'),
     ]),
     getItem('Verwaltung', 'verwaltung', <TeamOutlined />, [
       getItem('Mitarbeiter', 'Mitarbeiter'),
       getItem('Bereich', 'Bereich'),
       getItem('Gruppe', 'Gruppe'),
       getItem('Schichtart', 'Schichtart'),
+      
+      getItem('Schichtrotationplaner', 'Schichtrotationplaner'),
+      
     ]),
   ], []); // Empty dependency array as these items don't depend on any state or props
 

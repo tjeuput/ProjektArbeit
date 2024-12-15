@@ -10,6 +10,8 @@ import Mitarbeiter from '../Pages/Mitarbeiter';
 import Bereich from '../Pages/Bereich';
 import Gruppe from '../Pages/Gruppe';
 import Schichtart from '../Pages/Schichtart';
+import Schichtrotationplaner from '../Pages/Schichtrotationsplan'
+import EinzelauszugATbl from '../Pages/EinzelauszugATbl';
 
 const Pages = [
     { path: 'DienstpA', component: <DienstpA /> },
@@ -21,7 +23,9 @@ const Pages = [
     { path: 'Mitarbeiter', component: <Mitarbeiter/>},
     { path: 'Bereich', component: <Bereich/>},
     { path: 'Gruppe', component: <Gruppe/>},
-    { path: 'Schichtart', component: <Schichtart/>}
+    { path: 'Schichtart', component: <Schichtart/>},
+    { path: 'Schichtrotationplaner', component: <Schichtrotationplaner/>},
+    { path: 'EinzelauszugATbl', component: <EinzelauszugATbl/>},
   ];
   
   const AppRouter: React.FC = () => (
@@ -32,5 +36,5 @@ const Pages = [
       ))}
     </Routes>
   );
-
-export default AppRouter;
+ 
+export default AppRouter; 

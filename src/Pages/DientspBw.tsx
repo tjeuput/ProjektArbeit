@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Table, Space, Button, Card } from "antd";
 import { Content } from "antd/es/layout/layout";
 import MonthsHeader from "../Components/ScheduleTable/ScheduleTblAnt";
 import { invoke } from "@tauri-apps/api/tauri";
+import type { TableRef } from "antd/es/table";
 import { Months } from "../Components/ScheduleTable/helper";
+
 
 interface Employee {
   rest_2023?: number;
@@ -21,43 +23,93 @@ interface MappedEmployee {
   rest?: number;
   restUm?: number;
   name: string;
-  [key: string]: number | string | undefined;
+  [key: string]: number | string;
 }
 
 const DienstplanBw: React.FC = () => {
-  const [selectedArea, setSelectedArea] = useState<number>(3);
+  const area = 3;
+
   const columns = MonthsHeader();
+  //console.log("months header is", MonthsHeader());
+
   const [schedule, setSchedule] = useState<MappedEmployee[]>([]);
+
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchSchedule();
-  }, [selectedArea]);
+   const [updating, setUpdating] = useState(false);
 
-  const fetchSchedule = async () => {
+  useEffect(() => {
+    fetchSchedule(area);
+  }, []);
+
+  // Add update function
+  const handleUpdate = async () => {
     try {
+      setUpdating(true);
+      // Call the Rust update_schedule function
+      await invoke('update_schedule_command');
+      // Refresh the schedule data after update
+      await fetchSchedule(area);
+      setUpdating(false);
+    } catch (error) {
+      console.error("Error updating schedule:", error);
+      setUpdating(false);
+    }
+  };
+
+  // function to scroll to today's date when a button is clicked
+  const scrollToKey = (key: string) => {
+    const tableElement = document.querySelector(".ant-table-thead"); // Get th wrapper (the header)
+
+    if (tableElement) {
+      const headerElement = tableElement.querySelector(`th[data-key="${key}"]`); // Find the header cell with the specific key
+
+      if (headerElement) {
+        headerElement.scrollIntoView({
+          behavior: "smooth",
+          inline: "center", // Scroll horizontally to center the header cell
+        });
+      } else {
+        console.warn(`Header element with key '${key}' not found.`);
+      }
+    } else {
+      console.warn("Table element not found.");
+    }
+  };
+
+  // function to get today's date
+  const getToday: () => string = () => {
+    const today = new Date();
+    const day = today.getDate();
+    const month = today.getMonth() + 1;
+    // Creating the formatted string in 'month-day' format using Months in helper
+    const todayIs = `${Months[month]["name"]}-${day}`;
+    return todayIs.toLocaleLowerCase();
+  };
+  console.log(getToday());
+
+  const fetchSchedule = async (selectedArea) => {
+    
+    try {
+
       setLoading(true);
-      
-      const tableScheduleResponse = await invoke<string>("get_table_schedule_area", {
-        area: selectedArea
-      });
-      
+      // Fetch data from get_table_schedule
+      const tableScheduleResponse = await invoke<string>("get_table_schedule_area", {area : selectedArea});
       console.log(
-        "Debug: Received table schedule response:",
+        "Debug: Received response from get_table_schedule:",
         tableScheduleResponse
       );
       const parsedTableSchedule: Employee[] = JSON.parse(tableScheduleResponse);
 
+      // Fetch data from get_employee_count
       const employeeCountResponse = await invoke<string>(
-        "get_employee_daily_count_area", 
-        {area: selectedArea}
+        "get_employee_daily_count_area",  {area : selectedArea}
       );
-      
       console.log(
-        "Debug: Received employee count response:",
+        "Debug: Received response from get_employee_count:",
         employeeCountResponse
       );
-      const parsedEmployeeCount: { [key: string]: number } = 
+      const parsedEmployeeCount: { name: string; [key: string]: number } =
         JSON.parse(employeeCountResponse);
 
       // Merge the data from both APIs
@@ -68,57 +120,37 @@ const DienstplanBw: React.FC = () => {
             return [];
           }
 
-          // Create base employee row (Plan)
           const baseEmployee: MappedEmployee = {
-            key: index * 2 + 1,
+            key: index ,
             rest: employee.rest_2023 ?? 0,
             restUm: employee.rum_rest ?? 0,
             name: employee.name ?? "Unknown",
           };
 
-          // Fill in planned sessions
-          if (employee.sessions_planned) {
-            employee.sessions_planned.forEach((session, idx) => {
-              if (session && session !== 'null') {
-                // Add 1 to idx since our column keys are 1-based
-                baseEmployee[`${idx + 1}`] = session;
-              }
-            });
-          }
-          
-          // Create updated sessions row
+          employee.sessions_planned?.forEach((session, idx) => {
+            baseEmployee[`${idx + 1}`] = session;
+          });
+
           const updatedEmployee: MappedEmployee = {
-            key: index * 2 + 2,
+            key: index ,
             rest: employee.year_holiday ?? 0,
             restUm: employee.um_planned ?? 0,
             name: employee.last_name ?? "Unknown",
           };
 
-          // Fill in updated sessions, maintaining original empty cells
-          if (employee.sessions_updated) {
-            employee.sessions_updated.forEach((session, idx) => {
-              // Only set value if it's actually updated (not null)
-              if (session && session !== 'null') {
-                // Add 1 to idx since our column keys are 1-based
-                updatedEmployee[`${idx + 1}`] = session;
-              }
-            });
-          }
+          employee.sessions_updated?.forEach((session, idx) => {
+            updatedEmployee[`${idx + 1}`] = session;
+          });
 
           return [baseEmployee, updatedEmployee];
         }),
-        // Add the employee count row at the bottom
         {
-          key: -1, // Use negative key to ensure it's always last
+          key: 0,
           name: "Mitarbeiter am Meldetag",
-          ...Object.entries(parsedEmployeeCount).reduce((acc, [key, value]) => ({
-            ...acc,
-            [key]: value
-          }), {})
-        }
+          ...parsedEmployeeCount,
+        },
       ];
 
-      console.log("Debug: Mapped data:", mappedData);
       setSchedule(mappedData);
     } catch (error) {
       console.error("Error fetching schedule:", error);
@@ -129,8 +161,7 @@ const DienstplanBw: React.FC = () => {
   };
 
   const getRowClassName = (record: MappedEmployee, index: number) => {
-    if (record.key === -1) return "count-row";
-    return record.key % 2 === 0 ? "employee-row-bottom" : "employee-row-top";
+    return index % 2 ? "employee-row-bottom" : "employee-row-top";
   };
 
   return (
@@ -139,6 +170,11 @@ const DienstplanBw: React.FC = () => {
         <Button type="primary" onClick={() => scrollToKey(getToday())}>
           Heute
         </Button>
+        <Button 
+            type="primary" 
+            onClick={handleUpdate} 
+            loading={updating}
+          ></Button>
         <Content
           style={{
             margin: "8px 8px 8px",

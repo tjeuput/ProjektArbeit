@@ -1,0 +1,37 @@
+Structure
+
+Following the current structure of setting up the react component, by breaking down each component into smallest component before they are called to be delivered in UI Page inside of the routing menu, the form to set up shift rotations are broken down into form item group, call async function for each option in group selection as component Gruppeauswaehlen. The weekly shift rotation as 7 days drop down to choose where each week component is controlled by a time cycle as drop down menu. Initial value would be the least value, which is 14 days, then the week would be consisted of two. if user choose 28 then 3 weeks of shifts will be displayed in UI (dynamically)
+
+To call back end, service/api.ts lists all the async calls that fetch group from database, shifts implementing interfaces that are called from types.ts where group, and shifts structure ware defined. 
+
+src/
+├── components/
+│   └── ShiftPlanner/
+│       └── ShiftPlanner.tsx
+├── types/
+│   └── index.ts  (contains shared types like Group)
+└── services/
+└── api.ts
+
+If a component design is modified, e.g. the drop down (a select design component) has customized method, then a tsx file is created to define its responsibility in a method.
+
+It is helpful to define the expected data structure using interface, here, this component has options → with array, it has a selected value, an a void method. 
+
+Define props of Select, like options
+
+Inside the select component, then return the React Node of this component
+
+Since table has column and data, but the data in table is control by a drop down, and you want to separate every component to do its own responsibility, how does the drop down can get access from the table if they are separated?  should data props being passed to dropdown? 
+
+From the example it seems that methods and data are on the component that imports dropdown and table together? 
+
+in my table that has menu for each row
+
+- fetch data for row from db
+- const menu holds select node, data comes from fetch
+- configure header table and how the column will render each row, including menu
+- return as form item that has component table
+
+in my drop down component, only returning select component filled with values
+
+Outside component will be a form, importing different type of form.item, including form item that has component table.

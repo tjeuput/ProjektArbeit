@@ -47,33 +47,7 @@ const EinzelA: React.FC = () => {
     fetchSchedule();
   }, []);
 
-  const data : DataType [] = [];
-
-      data.push({
-        key: 1,
-      
-        rest:30,
-        
-        restUm: 30,
-        name: "myname",
-        1 : "1",
-        2: "1",
-        },
-        {
-          key: 2,
-        restUm: 20,
-        rest:10,
-        
-        name: "myname",
-        1 : "1",
-        2: "1",
-      
-        }
-      
-      
-      
-      
-      )
+  
 
   const fetchSchedule = async () => {
     try {
