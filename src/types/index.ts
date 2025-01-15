@@ -27,10 +27,22 @@ export interface SchichtTage {
     mo: string;
     di: string;
     mi: string;
-    dn: string;  // Note: Changed from 'do' since it's a reserved word in JS
+    dn: string;
     fr: string;
     sa: string;
     so: string;
+}
+
+export interface SchichtWoche {
+    woche: string;
+    schichten: SchichtTage;
+}
+
+export interface RotationsPlan {
+    gruppe_id: string;
+    start_datum: string;
+    end_datum: string;
+    wochen: SchichtWoche[];
 }
 
 export interface RotationsWoche {

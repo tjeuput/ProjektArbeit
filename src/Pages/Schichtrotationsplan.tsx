@@ -7,10 +7,9 @@ import Gruppeauswaehlen from "../Components/Schichtplaner/Gruppeauswaehlen";
 import SchichtrotationTabelle, {
   Wochenplan,
 } from "../Components/Schichtplaner/SchichtrotationTabelle";
-
 import {RotationsWocheForm} from "../types/index";
 import { planPruefen, speichereRotationsplan } from "../services/api";
-import { invoke } from '@tauri-apps/api';
+
 /**
  * Interface für das Formular zur Schichtrotation
  * @interface SchichtrotationFormular
@@ -69,73 +68,71 @@ const Schichtrotationplan: React.FC = () => {
     form.setFieldValue("wochenplan", neueWochenplan);
   };
 
-   /**
-   * Verarbeitet das Absenden des Formulars
-   * Prüft Berechtigungen und speichert den Rotationsplan
-   * @param {SchichtrotationFormular} values - Die Form.Item-Daten
-   * 
-   * Erwartete Werte:
-   * - gruppe: Gültige Gruppen-ID
-   * - datumbereich: [Startdatum, Enddatum]
-   * - zeitraum: 14, 28, 42 oder 63 Tage
-   * - wochenplan: Array mit Schichtzuweisungen pro Woche
-   */
-
   const beiAbschluss = async (values: SchichtrotationFormular) => {
-    try {
-        const [startDatum, endDatum] = values.datumbereich;
-        if (!hasPermission('bereichsleichter')) {
-          message.error('Keine Berechtigung für diese Aktion');
-          return;
-        }
+  try {
 
-         // Prüfen Sie zunächst, ob es bereits vorhandene Zeitpläne gibt
-         const canProceed = await planPruefen(
+         // Überprüfen Sie, ob der Benutzer die Berechtigung zum Erstellen von Rotationsplänen hat
+        if (!hasPermission('manager')) {
+            message.error('Sie haben keine Berechtigung, Schichtrotationspläne zu erstellen.');
+            return;
+        }
+      const [startDatum, endDatum] = values.datumbereich;
+      // Nach vorhandenen Zeitplänen suchen
+      const existingSchedules = await planPruefen(
           values.gruppe,
           startDatum.format("YYYY-MM-DD"),
           endDatum.format("YYYY-MM-DD")
       );
-      // Wenn es vorhandene Zeitpläne gibt und der Benutzer nicht bestätigt, wird zurückgegeben      
-      if (!canProceed) {
-          return; 
-      }
-  
-        // Benutzerinformationen zur Übermittlung hinzufügen
-        const submitData = {
-          ...values,
-          userId: user?.id,
-          userRole: user?.role
-        };
-        // Konvertiere die Wochenplan-Daten in das erwartete Format
-    const konvertierterWochenplan: RotationsWocheForm[] = values.wochenplan.map(woche => ({
-      woche: woche.woche,
-      schichten: {
-        mo: String(woche.mo || ''),
-        di: String(woche.di || ''),
-        mi: String(woche.mi || ''),
-        dn: String(woche.do || ''),  // Map 'do' to 'dn', rust reserveriert 'do' für einen Befehl
-        fr: String(woche.fr || ''),
-        sa: String(woche.sa || ''),
-        so: String(woche.so || '')
-      }
-    }));
-     // Wenn es keine Zeitpläne gibt
-        await speichereRotationsplan(
-            values.gruppe,
-            startDatum.format("YYYY-MM-DD"),
-            endDatum.format("YYYY-MM-DD"),
-            konvertierterWochenplan
-        );
 
-        message.success("Schichtrotationsplan erfolgreich gespeichert");
-    } catch (error) {
-        if (error instanceof Error && error.message === 'User cancelled overwrite') {
-            return; // Benutzer hat abgebrochen, keine Fehlermeldung erforderlich
-        }
-        message.success("Schichtrotationsplan erfolgreich gespeichert");
-    }
+      console.log('Found existing schedules:', existingSchedules);
+
+      // Wenn es bereits Zeitpläne gibt, Bestätigungsdialog anzeigen
+      if (existingSchedules && existingSchedules.length > 0) {
+          const employeeNames = existingSchedules
+              .map(schedule => `${schedule.mitarbeiter_name} ${schedule.mitarbeiter_nachname}`)
+              .join(", ");
+              
+          const confirmOverwrite = window.confirm(
+              `Achtung: Die folgenden Mitarbeiter haben in diesem Zeitraum bereits Dienstpläne:\n${employeeNames}\n\nMöchten Sie deren Dienstpläne überschreiben?`
+          );
+          
+          if (!confirmOverwrite) {
+              message.info("Vorgang abgebrochen");
+              return;
+          }
+      }
+
+      // Konvertiere den Plan
+      const konvertierterWochenplan: RotationsWocheForm[] = values.wochenplan.map(woche => ({
+          woche: woche.woche,
+          schichten: {
+              mo: String(woche.mo || ''),
+              di: String(woche.di || ''),
+              mi: String(woche.mi || ''),
+              dn: String(woche.do || ''),
+              fr: String(woche.fr || ''),
+              sa: String(woche.sa || ''),
+              so: String(woche.so || '')
+          }
+      }));
+
+      await speichereRotationsplan(
+          values.gruppe,
+          startDatum.format("YYYY-MM-DD"),
+          endDatum.format("YYYY-MM-DD"),
+          konvertierterWochenplan
+      );
+
+      message.success("Schichtrotationsplan erfolgreich gespeichert");
+  } catch (error) {
+      console.error('Error saving rotation plan:', error);
+      if (error instanceof Error) {
+          message.error(`Fehler: ${error.message}`);
+      } else {
+          message.error("Ein unerwarteter Fehler ist aufgetreten");
+      }
+  }
 };
-
   
   return (
     <Content
