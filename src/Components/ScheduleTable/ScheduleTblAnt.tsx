@@ -1,5 +1,41 @@
+import React, { useState, useEffect } from 'react';
+import { Select } from 'antd';
 import { Months, Days } from './helper';
-import './ScheduleTblAnt.css'; 
+import './ScheduleTblAnt.css';
+import { fetchSchichten } from '../../services/api';
+import { Schicht } from '../../types';
+
+
+const DropdownCell = ({ value, row, column }) => {
+  const [schichten, setSchichten] = useState<Schicht[]>([]);
+  useEffect(() => {
+  fetchSchichten()
+    .then((data) => {
+      setSchichten(data);
+      console.log(data);
+    })
+    .catch((error) => {
+      console.error('Error fetching schichten:', error);
+    });
+}, []);
+  return (
+    <Select 
+      defaultValue={value}
+      style={{ width: '100%' }}
+      onChange={(newValue) => {
+        // Handle change if needed
+        console.log('Changed value:', newValue, 'for row:', row, 'column:', column);
+      }}
+    >
+      {schichten.map(schicht => (
+        <Select.Option key={schicht.schicht_id} value={schicht.bezeichnung}>
+          {schicht.bezeichnung}
+        </Select.Option>
+      ))}
+    </Select>
+  );
+};
+
 
 const MonthsHeader = () => {
   let currentDay = 0;
@@ -70,14 +106,17 @@ const MonthsHeader = () => {
             dataIndex: `${month.name.toLowerCase()}-${indexDay + 1}`,
             key: `${month.name.toLowerCase()}-${indexDay + 1}`, // this is what I want to go, the header
             className: dayOfWeek=== 6 || dayOfWeek === 0 ? 'weekend-cell':undefined,
-            width: 50,
+            width: 75,
             children: [
               {
                 title: `${indexDay + 1}.${index}`,
                 dataIndex: `${currentDay}`,
                 className: dayOfWeek === 6 || dayOfWeek === 0 ? 'weekend-cell' : undefined,
-                width: 50,
-                onHeaderCell: () => ({ 'data-key': `${month.name.toLowerCase()}-${indexDay + 1}` }) 
+                width: 75,
+                onHeaderCell: () => ({ 'data-key': `${month.name.toLowerCase()}-${indexDay + 1}` }),
+                 render: (value, record, index) => (
+                  <DropdownCell value={value} record={record} index={index} />
+                )
                 
               }
             ]

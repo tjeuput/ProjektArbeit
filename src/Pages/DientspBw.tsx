@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Table, Space, Button, Card } from "antd";
 import { Content } from "antd/es/layout/layout";
 import MonthsHeader from "../Components/ScheduleTable/ScheduleTblAnt";
 import { invoke } from "@tauri-apps/api/tauri";
-import type { TableRef } from "antd/es/table";
+
 import { Months } from "../Components/ScheduleTable/helper";
 
 
@@ -170,11 +170,11 @@ const DienstplanBw: React.FC = () => {
         <Button type="primary" onClick={() => scrollToKey(getToday())}>
           Heute
         </Button>
-        <Button 
+        {/*<Button 
             type="primary" 
             onClick={handleUpdate} 
             loading={updating}
-          ></Button>
+          ></Button>*/} 
         <Content
           style={{
             margin: "8px 8px 8px",

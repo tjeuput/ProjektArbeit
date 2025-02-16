@@ -43,7 +43,7 @@ const SchichtrotationTabelle: React.FC<SchichtrotationTabelleProps> = ({
   onWochenplanUpdate,
 }) => {
   const [schichten, setSchichten] = useState<Schicht[]>([]);
-
+  //API-Aufrufe: fetchSchichten(): Lädt verfügbare Schichttypen beim ersten Render
   useEffect(() => {
     fetchSchichten()
       .then((daten) => {
@@ -56,6 +56,8 @@ const SchichtrotationTabelle: React.FC<SchichtrotationTabelleProps> = ({
         console.error("fetchSchicht ist schiefgelaufen", error);
       });
   }, [zeitraum]);
+
+  //Erstellt einen neuen Wochenplan mit Standardschichten
 
   const initialisiereWochenplan = (tage: number, defaultSchicht: string) => {
     const wochenanzahl = tage / 7;
@@ -77,6 +79,7 @@ const SchichtrotationTabelle: React.FC<SchichtrotationTabelleProps> = ({
     onWochenplanUpdate?.(neueWochenplan);
   };
 
+  //Konfiguration für Spalten der Tabelle jede wochenplan enthält schichtplan
   const attribute = [
     {
       title: "Wochennummer",
@@ -87,6 +90,7 @@ const SchichtrotationTabelle: React.FC<SchichtrotationTabelleProps> = ({
       title: "Mo",
       dataIndex: "montag",
       key: "mo",
+   
       render: (_: any, record: Wochenplan, index: number) => (
         <Form.Item name={["wochenplan", index, "mo"]} noStyle>
           <Select style={{ width: "100%" }}>

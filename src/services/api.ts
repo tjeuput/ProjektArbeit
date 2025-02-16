@@ -64,16 +64,29 @@ export const planPruefen = async (
     endDatum: string
 ): Promise<VorhandenerZeitplan[]> => {
     try {
+        console.log('Checking schedules with params:', {
+            gruppeId,
+            startDatum,
+            endDatum
+        });
+        
+        // Important: Make sure parameter names match exactly what Rust expects
         const response = await invoke<string>("pruefe_schichtgruppe", {
-            gruppe_id: gruppeId,
-            start_datum: startDatum,
-            end_datum: endDatum,
+            gruppeId,
+            startDatum,  // Changed from start_datum to match Rust
+            endDatum,    // Changed from end_datum to match Rust
         });
 
+        console.log('Response from pruefe_schichtgruppe:', response);
         return JSON.parse(response);
     } catch (error) {
-        console.error("Error checking schedules:", error);
-        throw new Error("Failed to check existing schedules");
+        console.error("Error checking schedules - Full error:", error);
+        console.error("Error checking schedules - Parameters:", {
+            gruppeId,
+            startDatum,
+            endDatum
+        });
+        throw new Error("Fehler beim Prüfen der vorhandenen Dienstpläne");
     }
 };
 
@@ -84,39 +97,41 @@ export const speichereRotationsplan = async (
     wochenplan: RotationsWoche[]
 ): Promise<void> => {
     try {
-        // First check for conflicts
-        const vorhandeneZeitplaene = await planPruefen(
+        console.log('Saving rotation plan with:', {
             gruppeId,
             startDatum,
-            endDatum
-        );
-
-        if (vorhandeneZeitplaene.length > 0) {
-            const employeeNames = vorhandeneZeitplaene
-                .map(plan => `${plan.mitarbeiter_name} ${plan.mitarbeiter_nachname}`)
-                .join(", ");
-                
-            const confirmOverwrite = window.confirm(
-                `Achtung: Die folgenden Mitarbeiter haben in diesem Zeitraum bereits Dienstpläne:\n${employeeNames}\n\nMöchten Sie deren Dienstpläne überschreiben?`
-            );
-            
-            if (!confirmOverwrite) {
-                throw new Error('User cancelled overwrite');
-            }
-        }
-
-        // Save the rotation plan
-        await invoke("speichere_rotation", {
-            rotationPlan: {
-                gruppe_id: gruppeId,
-                start_datum: startDatum,
-                end_datum: endDatum,
-                wochen: wochenplan
-            }
+            endDatum,
+            wochenplan
         });
 
+        // Match the Rust struct field names exactly
+        await invoke("speichere_rotation", {
+            rotationPlan: {
+                gruppe_id: gruppeId,    // Changed to match Rust struct
+                start_datum: startDatum, // Changed to match Rust struct
+                end_datum: endDatum,     // Changed to match Rust struct
+                wochen: wochenplan.map(woche => ({  // Match the Rust SchichtWoche struct
+                    woche: woche.woche,
+                    schichten: {
+                        mo: woche.schichten.mo,
+                        di: woche.schichten.di,
+                        mi: woche.schichten.mi,
+                        dn: woche.schichten.dn,
+                        fr: woche.schichten.fr,
+                        sa: woche.schichten.sa,
+                        so: woche.schichten.so
+                    }
+                }))
+            }
+        });
     } catch (error) {
-        console.error("Error saving rotation plan:", error);
-        throw error;
+        console.error("Error saving rotation plan - Full error:", error);
+        console.error("Error saving rotation plan - Data:", {
+            gruppeId,
+            startDatum,
+            endDatum,
+            wochenplan
+        });
+        throw new Error("Fehler beim Speichern des Rotationsplans");
     }
 };
