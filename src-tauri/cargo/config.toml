@@ -1,0 +1,6 @@
+[target.'cfg(all())']
+rustflags = ["-Ctarget-feature=+crt-static"]
+
+[build]
+# Example settings for OpenSSL if precompiled
+openssl-static = true
